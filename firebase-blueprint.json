@@ -1,0 +1,453 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile in Legal Lens",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID matching the document ID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar URL",
+          "maxLength": 1024
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Server timestamp of profile creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "Workspace": {
+      "title": "Workspace",
+      "description": "A private workspace owned by a user containing legal documents and analyses",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique workspace identifier",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the owner user",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Workspace name",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional brief description of workspace purpose",
+          "maxLength": 500
+        },
+        "documentCount": {
+          "type": "number",
+          "description": "Number of documents currently in this workspace"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Workspace status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of last update"
+        }
+      },
+      "required": ["id", "ownerId", "name", "status", "createdAt", "updatedAt"]
+    },
+    "LegalDocument": {
+      "title": "LegalDocument",
+      "description": "Metadata for an uploaded PDF legal document",
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "description": "Unique document identifier",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "workspaceId": {
+          "type": "string",
+          "description": "Identifier of parent workspace",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of document owner",
+          "maxLength": 128
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Original file name",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "fileType": {
+          "type": "string",
+          "description": "MIME type, must be application/pdf",
+          "enum": ["application/pdf"]
+        },
+        "fileSize": {
+          "type": "number",
+          "description": "File size in bytes (maximum 26214400 / 25MB)"
+        },
+        "uploadTimestamp": {
+          "type": "string",
+          "description": "Timestamp of file upload"
+        },
+        "processingStatus": {
+          "type": "string",
+          "enum": ["pending", "processed", "failed"],
+          "description": "Current processing state"
+        },
+        "analysisStatus": {
+          "type": "string",
+          "enum": ["not_started", "analyzing", "completed", "failed"],
+          "description": "AI analysis state"
+        },
+        "storageReference": {
+          "type": "string",
+          "description": "Storage path or reference URI",
+          "maxLength": 1024
+        },
+        "pageCount": {
+          "type": "number",
+          "description": "Number of pages in PDF"
+        },
+        "summaryPreview": {
+          "type": "string",
+          "description": "Brief summary preview extracted",
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "documentId",
+        "workspaceId",
+        "ownerId",
+        "fileName",
+        "fileType",
+        "fileSize",
+        "uploadTimestamp",
+        "processingStatus",
+        "analysisStatus"
+      ]
+    },
+    "DocumentAnalysis": {
+      "title": "DocumentAnalysis",
+      "description": "Structured AI analysis results for a document",
+      "type": "object",
+      "properties": {
+        "analysisId": {
+          "type": "string",
+          "description": "Unique analysis ID",
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "description": "Parent workspace ID",
+          "maxLength": 128
+        },
+        "documentId": {
+          "type": "string",
+          "description": "Analyzed document ID",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of owner",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "keyRisksCount": {
+          "type": "number"
+        },
+        "clausesCount": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["analysisId", "workspaceId", "documentId", "ownerId", "title", "createdAt", "updatedAt"]
+    },
+    "Clause": {
+      "title": "Clause",
+      "description": "Individual legal clause extracted from document",
+      "type": "object",
+      "properties": {
+        "clauseId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "documentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "originalText": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "plainExplanation": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "riskLevel": {
+          "type": "string",
+          "enum": ["low", "moderate", "high", "critical"]
+        },
+        "section": {
+          "type": "string",
+          "maxLength": 100
+        }
+      },
+      "required": ["clauseId", "workspaceId", "documentId", "ownerId", "title", "originalText", "riskLevel"]
+    },
+    "Insight": {
+      "title": "Insight",
+      "description": "Actionable insight, notice, or attention point",
+      "type": "object",
+      "properties": {
+        "insightId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "documentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "type": {
+          "type": "string",
+          "enum": ["risk", "obligation", "deadline", "benefit", "ambiguity"]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 3000
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "attention", "warning", "critical"]
+        },
+        "recommendation": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "required": ["insightId", "workspaceId", "documentId", "ownerId", "type", "title", "severity"]
+    },
+    "TimelineEvent": {
+      "title": "TimelineEvent",
+      "description": "Chronological milestone or deadline extracted from legal document",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "documentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "importance": {
+          "type": "string",
+          "enum": ["standard", "important", "critical"]
+        }
+      },
+      "required": ["eventId", "workspaceId", "documentId", "ownerId", "date", "title", "importance"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "User question or inquiry formulated for legal professional",
+      "type": "object",
+      "properties": {
+        "questionId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "documentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "queryText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "answerSummary": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "answered", "prepared_for_consultation"]
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": ["questionId", "workspaceId", "ownerId", "queryText", "status", "createdAt"]
+    },
+    "PreparationBrief": {
+      "title": "PreparationBrief",
+      "description": "Organized consultation brief summarizing issues and questions for a lawyer",
+      "type": "object",
+      "properties": {
+        "briefId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "targetAudience": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      },
+      "required": ["briefId", "workspaceId", "ownerId", "title", "summary", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private profile of the authenticated user"
+    },
+    "/users/{userId}/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/Workspace" },
+      "description": "User's private legal workspaces"
+    },
+    "/users/{userId}/workspaces/{workspaceId}/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/LegalDocument" },
+      "description": "Uploaded legal documents belonging to the workspace"
+    },
+    "/users/{userId}/workspaces/{workspaceId}/analyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/DocumentAnalysis" },
+      "description": "Structured AI document analysis reports"
+    },
+    "/users/{userId}/workspaces/{workspaceId}/insights/{insightId}": {
+      "schema": { "$ref": "#/entities/Insight" },
+      "description": "Extracted legal insights and attention points"
+    },
+    "/users/{userId}/workspaces/{workspaceId}/timeline/{eventId}": {
+      "schema": { "$ref": "#/entities/TimelineEvent" },
+      "description": "Extracted timeline events and key deadlines"
+    },
+    "/users/{userId}/workspaces/{workspaceId}/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Questions and consultation prep items"
+    },
+    "/users/{userId}/workspaces/{workspaceId}/briefs/{briefId}": {
+      "schema": { "$ref": "#/entities/PreparationBrief" },
+      "description": "Prepared attorney consultation briefs"
+    }
+  }
+}

@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create, update: if isOwner(userId) 
+        && request.resource.data.uid == userId;
+      allow delete: if isOwner(userId);
+
+      // Workspaces belonging to the user
+      match /workspaces/{workspaceId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) 
+          && isValidId(workspaceId)
+          && request.resource.data.ownerId == userId;
+        allow update: if isOwner(userId) 
+          && isValidId(workspaceId)
+          && request.resource.data.ownerId == userId
+          && resource.data.ownerId == userId;
+        allow delete: if isOwner(userId);
+
+        // Documents in workspace
+        match /documents/{documentId} {
+          allow get, list: if isOwner(userId);
+          allow create: if isOwner(userId) 
+            && isValidId(documentId)
+            && request.resource.data.ownerId == userId
+            && request.resource.data.workspaceId == workspaceId;
+          allow update: if isOwner(userId) 
+            && isValidId(documentId)
+            && request.resource.data.ownerId == userId
+            && resource.data.ownerId == userId;
+          allow delete: if isOwner(userId);
+
+          match /{documentSubCollection=**} {
+            allow read, write: if isOwner(userId);
+          }
+        }
+
+        // Analyses in workspace
+        match /analyses/{analysisId} {
+          allow get, list: if isOwner(userId);
+          allow create: if isOwner(userId) 
+            && isValidId(analysisId)
+            && request.resource.data.ownerId == userId
+            && request.resource.data.workspaceId == workspaceId;
+          allow update: if isOwner(userId) 
+            && isValidId(analysisId)
+            && request.resource.data.ownerId == userId
+            && resource.data.ownerId == userId;
+          allow delete: if isOwner(userId);
+        }
+
+        // Insights in workspace
+        match /insights/{insightId} {
+          allow get, list: if isOwner(userId);
+          allow create, update: if isOwner(userId) 
+            && isValidId(insightId)
+            && request.resource.data.ownerId == userId;
+          allow delete: if isOwner(userId);
+        }
+
+        // Timeline events in workspace
+        match /timeline/{eventId} {
+          allow get, list: if isOwner(userId);
+          allow create, update: if isOwner(userId) 
+            && isValidId(eventId)
+            && request.resource.data.ownerId == userId;
+          allow delete: if isOwner(userId);
+        }
+
+        // Questions in workspace
+        match /questions/{questionId} {
+          allow get, list: if isOwner(userId);
+          allow create, update: if isOwner(userId) 
+            && isValidId(questionId)
+            && request.resource.data.ownerId == userId;
+          allow delete: if isOwner(userId);
+        }
+
+        // Preparation briefs in workspace
+        match /briefs/{briefId} {
+          allow get, list: if isOwner(userId);
+          allow create, update: if isOwner(userId) 
+            && isValidId(briefId)
+            && request.resource.data.ownerId == userId;
+          allow delete: if isOwner(userId);
+        }
+      }
+    }
+  }
+}
