@@ -2,6 +2,7 @@
   "name": "Legal Lens",
   "description": "Evidence-grounded legal information workspace helping users understand documents, compare terms, organize timelines, and prepare for legal consultations.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
-

@@ -10,6 +10,55 @@ import { buildGroundedQAPrompt } from '../prompts/groundedQA';
 
 let aiClient: GoogleGenAI | null = null;
 
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+// Bounded in-memory caches (max 100 analysis entries, 200 Q&A entries, 1-hour TTL)
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const MAX_ANALYSIS_CACHE_SIZE = 100;
+const MAX_QA_CACHE_SIZE = 200;
+
+const analysisCache = new Map<string, CacheEntry<AIAnalysisOutput>>();
+const qaCache = new Map<string, CacheEntry<DocumentAnswerType>>();
+
+function computeSimpleHash(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
+function getCachedItem<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedItem<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T, maxSize: number): void {
+  if (cache.size >= maxSize) {
+    // Evict oldest entry
+    const firstKey = cache.keys().next().value;
+    if (firstKey !== undefined) {
+      cache.delete(firstKey);
+    }
+  }
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+export function clearAiServiceCache(): void {
+  analysisCache.clear();
+  qaCache.clear();
+}
+
 function getAiClient(): GoogleGenAI {
   if (!aiClient) {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -55,8 +104,19 @@ export interface GroundedQuestionRequest {
 export async function analyzeDocumentStructure(
   req: DocumentAnalysisRequest
 ): Promise<AIAnalysisOutput> {
+  // Compute cache key based on file name, content hash, and analysis scope
+  const contentHash = req.documentExcerpt ? computeSimpleHash(req.documentExcerpt) : 'empty';
+  const cacheKey = `analysis_${req.fileName}_${contentHash}_${req.analysisScope || 'full'}`;
+
+  const cachedResult = getCachedItem(analysisCache, cacheKey);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
   if (!isGeminiConfigured()) {
-    return getRealisticAnalysis(req.fileName, req.documentExcerpt);
+    const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
+    setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
+    return fallback;
   }
 
   const client = getAiClient();
@@ -88,7 +148,9 @@ export async function analyzeDocumentStructure(
     const validationResult = AIAnalysisOutputSchema.safeParse(rawJson);
     if (!validationResult.success) {
       console.warn('AI analysis output failed strict schema validation:', validationResult.error.format());
-      return getRealisticAnalysis(req.fileName, req.documentExcerpt);
+      const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
+      setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
+      return fallback;
     }
 
     const data = validationResult.data;
@@ -98,10 +160,14 @@ export async function analyzeDocumentStructure(
       data.attentionItems = buildAttentionItemsFromAnalysis(data, req.fileName);
     }
 
+    // Cache verified structured output
+    setCachedItem(analysisCache, cacheKey, data, MAX_ANALYSIS_CACHE_SIZE);
     return data;
   } catch (error) {
     console.error('Gemini analysis failed during processing:', error instanceof Error ? error.message : error);
-    return getRealisticAnalysis(req.fileName, req.documentExcerpt);
+    const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
+    setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
+    return fallback;
   }
 }
 
@@ -115,8 +181,19 @@ export async function answerGroundedQuestion(
   const disclaimer =
     'Legal Lens provides evidence-grounded informational assistance and does not constitute formal legal advice. Please consult a licensed attorney for specific legal matters.';
 
+  const normalizedQ = req.question.toLowerCase().trim();
+  const contextHash = computeSimpleHash(req.documentContext || '');
+  const cacheKey = `qa_${normalizedQ}_${req.documentTitle || 'doc'}_${contextHash}`;
+
+  const cachedQA = getCachedItem(qaCache, cacheKey);
+  if (cachedQA) {
+    return cachedQA;
+  }
+
   if (!isGeminiConfigured()) {
-    return getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+    const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+    setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
+    return fallback;
   }
 
   const client = getAiClient();
@@ -147,16 +224,23 @@ export async function answerGroundedQuestion(
     const validationResult = DocumentAnswerSchema.safeParse(rawJson);
     if (!validationResult.success) {
       console.warn('Grounded Q&A output schema validation warning:', validationResult.error.format());
-      return getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+      const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+      setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
+      return fallback;
     }
 
-    return {
+    const finalAnswer: DocumentAnswerType = {
       ...validationResult.data,
       disclaimer,
     };
+
+    setCachedItem(qaCache, cacheKey, finalAnswer, MAX_QA_CACHE_SIZE);
+    return finalAnswer;
   } catch (error) {
     console.error('Gemini Q&A query failed:', error instanceof Error ? error.message : error);
-    return getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+    const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+    setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
+    return fallback;
   }
 }
 

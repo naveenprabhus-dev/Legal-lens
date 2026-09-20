@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+/* High-contrast accessible focus ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* Accessible Skip to Content Link */
+.skip-to-content-link {
+  position: absolute;
+  top: -9999px;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.75rem 1.25rem;
+  background-color: #1e1b4b;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  transition: top 0.15s ease-in-out;
+  text-decoration: none;
+}
+
+.skip-to-content-link:focus {
+  top: 1rem;
+  outline: 3px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Considerations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

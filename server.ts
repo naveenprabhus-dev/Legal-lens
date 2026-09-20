@@ -1,13 +1,9 @@
 import path from 'path';
-import { fileURLToPath } from 'url';
 import express from 'express';
 import { app } from './server/app';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const PORT = 3000;
-const distPath = path.resolve(__dirname, 'dist');
+const PORT = Number(process.env.PORT) || 3000;
+const distPath = path.resolve(process.cwd(), 'dist');
 
 // Serve static assets in production
 app.use(express.static(distPath));

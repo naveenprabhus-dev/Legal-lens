@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useWorkspaces } from './hooks/useWorkspaces';
 import { useDocuments } from './hooks/useDocuments';
@@ -48,7 +48,7 @@ export default function App() {
   } = useDocuments(user?.uid, activeWorkspace?.id);
 
   // Handle Question saving from Q&A drawer or questions tab
-  const handleSaveQuestion = async (queryText: string, answerSummary?: string) => {
+  const handleSaveQuestion = useCallback(async (queryText: string, answerSummary?: string) => {
     if (!user || !activeWorkspace) return;
     await saveQuestion(
       user.uid,
@@ -57,7 +57,7 @@ export default function App() {
       activeDocument?.documentId,
       answerSummary
     );
-  };
+  }, [user, activeWorkspace, activeDocument?.documentId]);
 
   // 1. Initial auth loading state
   if (authLoading) {
@@ -174,11 +174,26 @@ export default function App() {
         )}
 
         {activeView === 'compare' && (
-          <CompareView onBackToDashboard={() => setActiveView('dashboard')} />
+          <CompareView
+            onBackToDashboard={() => setActiveView('dashboard')}
+            activeWorkspace={activeWorkspace}
+            documents={documents}
+            activeDocument={activeDocument}
+            analysisRecord={analysisRecord}
+            onNavigateToWorkspace={() => setActiveView('workspace')}
+          />
         )}
 
         {activeView === 'briefs' && (
-          <PreparationBriefsView onBackToDashboard={() => setActiveView('dashboard')} />
+          <PreparationBriefsView
+            onBackToDashboard={() => setActiveView('dashboard')}
+            activeWorkspace={activeWorkspace}
+            documents={documents}
+            activeDocument={activeDocument}
+            analysisRecord={analysisRecord}
+            onSelectDocument={setActiveDocumentId}
+            onNavigateToWorkspace={() => setActiveView('workspace')}
+          />
         )}
       </div>
     </div>

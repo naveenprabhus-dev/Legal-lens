@@ -19,6 +19,7 @@ import {
   LEGAL_DISCLAIMER,
   TRUST_NOTE,
 } from '../../config/constants';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -26,6 +27,11 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   const [showDemoModal, setShowDemoModal] = useState(false);
+
+  const demoModalRef = useFocusTrap<HTMLDivElement>({
+    isOpen: showDemoModal,
+    onClose: () => setShowDemoModal(false),
+  });
 
   return (
     <div className="min-h-screen bg-[#faf9f6] text-slate-900 flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
@@ -292,20 +298,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="how-it-works-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs"
         >
-          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-xl p-6 sm:p-8">
+          <div
+            ref={demoModalRef}
+            className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-xl p-6 sm:p-8"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
               <div className="flex items-center gap-2.5">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-serif text-xl font-medium text-slate-900">
+                <FileText className="w-5 h-5 text-indigo-600" aria-hidden="true" />
+                <h3 id="how-it-works-modal-title" className="font-serif text-xl font-medium text-slate-900">
                   How Legal Lens Works
                 </h3>
               </div>
               <button
                 id="close-demo-modal-btn"
                 onClick={() => setShowDemoModal(false)}
-                className="text-slate-600 hover:text-slate-600 p-1.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
+                className="text-slate-600 hover:text-slate-800 p-1.5 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
+                aria-label="Close dialog"
               >
                 ✕
               </button>

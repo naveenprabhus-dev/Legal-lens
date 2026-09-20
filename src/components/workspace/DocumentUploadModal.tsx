@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { MAX_DOCUMENT_FILE_SIZE_BYTES } from '../../schemas/document-schemas';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface DocumentUploadModalProps {
   isOpen: boolean;
@@ -23,6 +24,12 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onClose: uploading ? undefined : onClose,
+    initialFocusSelector: '#upload-dropzone',
+  });
 
   if (!isOpen) return null;
 
@@ -78,6 +85,13 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     }
   };
 
+  const handleDropzoneKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fileInputRef.current?.click();
+    }
+  };
+
   const displayError = localError || uploadError;
 
   return (
@@ -87,7 +101,10 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
       aria-labelledby="upload-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs"
     >
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl p-6">
+      <div
+        ref={modalRef}
+        className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-xl p-6"
+      >
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
           <h3 id="upload-modal-title" className="font-serif text-lg font-medium text-slate-900">
             Upload Legal Document
@@ -96,7 +113,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             id="close-upload-modal-btn"
             onClick={onClose}
             disabled={uploading}
-            className="text-slate-600 hover:text-slate-600 p-1 rounded-md"
+            className="text-slate-600 hover:text-slate-800 p-1.5 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
+            aria-label="Close upload dialog"
           >
             ✕
           </button>
@@ -104,11 +122,20 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
         {/* Drag and Drop Zone */}
         <div
+          id="upload-dropzone"
+          role="button"
+          tabIndex={0}
+          aria-label={
+            selectedFile
+              ? `Selected file: ${selectedFile.name}. Press Enter or Space to replace file.`
+              : 'PDF upload area. Press Enter or Space to browse and select a PDF file from your computer.'
+          }
+          onKeyDown={handleDropzoneKeyDown}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all focus:outline-hidden focus:ring-2 focus:ring-indigo-400 ${
             dragOver
               ? 'border-indigo-500 bg-indigo-50/50'
               : selectedFile
@@ -116,7 +143,11 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
               : 'border-slate-300 hover:border-indigo-300 bg-slate-50/50'
           }`}
         >
+          <label htmlFor="pdf-upload-input" className="sr-only">
+            Upload PDF Document
+          </label>
           <input
+            id="pdf-upload-input"
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
@@ -127,7 +158,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
           <div className="flex flex-col items-center justify-center">
             {selectedFile ? (
               <>
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3" aria-hidden="true">
                   <FileText className="w-6 h-6" />
                 </div>
                 <div className="text-xs font-semibold text-slate-800">{selectedFile.name}</div>
@@ -137,11 +168,11 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
               </>
             ) : (
               <>
-                <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3" aria-hidden="true">
                   <UploadCloud className="w-6 h-6" />
                 </div>
                 <p className="text-xs font-medium text-slate-700">
-                  Drag and drop your PDF here, or <span className="text-indigo-600 underline">browse files</span>
+                  Drag and drop your PDF here, or <span className="text-indigo-600 underline font-semibold">browse files</span>
                 </p>
                 <p className="text-[11px] text-slate-600 mt-1">
                   Supported format: PDF up to 25 MB
@@ -153,23 +184,34 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
         {/* Error message */}
         {displayError && (
-          <div className="mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-2"
+          >
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
             <span>{displayError}</span>
           </div>
         )}
 
         {/* Upload Progress */}
         {uploading && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+          <div className="mt-4" role="status" aria-live="polite">
+            <div className="flex items-center justify-between text-xs text-slate-700 mb-1">
               <span className="flex items-center gap-1.5">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" aria-hidden="true" />
                 <span>Ingesting document & generating structural index...</span>
               </span>
-              <span>{uploadProgress}%</span>
+              <span className="font-mono font-medium">{uploadProgress}%</span>
             </div>
-            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-valuenow={uploadProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Upload and indexing progress"
+            >
               <div
                 className="h-full bg-indigo-600 transition-all duration-300 rounded-full"
                 style={{ width: `${uploadProgress}%` }}
@@ -184,7 +226,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             id="cancel-upload-btn"
             onClick={onClose}
             disabled={uploading}
-            className="px-4 py-2 text-xs text-slate-600 hover:text-slate-800"
+            className="px-4 py-2 text-xs text-slate-600 hover:text-slate-800 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
           >
             Cancel
           </button>
@@ -193,16 +235,16 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             id="confirm-upload-btn"
             onClick={handleSubmit}
             disabled={!selectedFile || uploading}
-            className="px-5 py-2 text-xs rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+            className="px-5 py-2 text-xs rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs disabled:opacity-50 flex items-center gap-1.5 focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
           >
             {uploading ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                 <span>Processing...</span>
               </>
             ) : (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Start Ingestion</span>
               </>
             )}

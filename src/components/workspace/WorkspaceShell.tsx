@@ -251,6 +251,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
       {/* Processing Lifecycle Banner */}
       {(analyzing || uploading || lifecycleStage === 'PROCESSING_FAILED') && (
         <div
+          role="status"
+          aria-live="polite"
           className={`px-4 sm:px-6 py-2 text-xs flex items-center justify-between border-b ${
             lifecycleStage === 'PROCESSING_FAILED'
               ? 'bg-rose-50 text-rose-800 border-rose-200'
@@ -259,6 +261,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         >
           <div className="flex items-center gap-2">
             <RefreshCw
+              aria-hidden="true"
               className={`w-3.5 h-3.5 ${
                 lifecycleStage === 'PROCESSING_FAILED' ? 'text-rose-600' : 'animate-spin text-indigo-600'
               }`}
@@ -268,7 +271,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           {lifecycleStage === 'PROCESSING_FAILED' && activeDocument && (
             <button
               onClick={() => onTriggerAnalysis(activeDocument)}
-              className="text-[11px] font-semibold underline text-rose-900 hover:text-rose-950"
+              className="text-[11px] font-semibold underline text-rose-900 hover:text-rose-950 focus:outline-hidden focus:ring-2 focus:ring-rose-400 rounded"
             >
               Retry Analysis
             </button>
@@ -277,8 +280,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
       )}
 
       {/* Mobile Column Switcher (visible only on small screens) */}
-      <div className="lg:hidden bg-white border-b border-slate-200 flex text-xs font-medium shrink-0">
+      <div className="lg:hidden bg-white border-b border-slate-200 flex text-xs font-medium shrink-0" role="tablist" aria-label="Mobile column switcher">
         <button
+          role="tab"
+          aria-selected={mobileColumn === 'left'}
+          aria-controls="mobile-col-left"
+          id="tab-mobile-docs"
           onClick={() => setMobileColumn('left')}
           className={`flex-1 py-2.5 text-center border-b-2 transition-colors ${
             mobileColumn === 'left'
@@ -289,6 +296,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           Docs ({documents.length})
         </button>
         <button
+          role="tab"
+          aria-selected={mobileColumn === 'center'}
+          aria-controls="mobile-col-center"
+          id="tab-mobile-analysis"
           onClick={() => setMobileColumn('center')}
           className={`flex-1 py-2.5 text-center border-b-2 transition-colors ${
             mobileColumn === 'center'
@@ -299,6 +310,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           Analysis Views
         </button>
         <button
+          role="tab"
+          aria-selected={mobileColumn === 'right'}
+          aria-controls="mobile-col-right"
+          id="tab-mobile-ai"
           onClick={() => setMobileColumn('right')}
           className={`flex-1 py-2.5 text-center border-b-2 transition-colors ${
             mobileColumn === 'right'
@@ -318,6 +333,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         {/* LEFT COLUMN: Document Drawer & Files Ingestion               */}
         {/* ============================================================ */}
         <aside
+          id="mobile-col-left"
+          aria-label="Documents repository"
           className={`w-full lg:w-64 xl:w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto ${
             mobileColumn === 'left' ? 'flex' : 'hidden lg:flex'
           }`}
@@ -333,19 +350,24 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
             <button
               id="upload-document-btn"
               onClick={() => setIsUploadModalOpen(true)}
-              className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
+              className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
               title="Upload PDF Document"
+              aria-label="Upload PDF Document"
             >
-              <Upload className="w-4 h-4" />
+              <Upload className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
 
           {/* Search Documents */}
           <div className="p-3 border-b border-slate-100">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <label htmlFor="search-documents-input" className="sr-only">
+                Filter documents
+              </label>
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" aria-hidden="true" />
               <input
                 type="text"
+                id="search-documents-input"
                 value={searchDocQuery}
                 onChange={e => setSearchDocQuery(e.target.value)}
                 placeholder="Filter documents..."
@@ -355,10 +377,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           </div>
 
           {/* Document Items List */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1" role="list" aria-label="Document list">
             {filteredDocuments.length === 0 ? (
               <div className="p-6 text-center text-slate-600">
-                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" aria-hidden="true" />
                 <p className="text-xs font-medium">No documents yet</p>
                 <p className="text-[11px] text-slate-600 mt-1">
                   Upload a PDF contract to begin analysis.
@@ -370,11 +392,21 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                 return (
                   <div
                     key={doc.documentId}
+                    role="listitem"
+                    tabIndex={0}
+                    aria-label={`Select document ${doc.fileName}`}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectDocument(doc.documentId);
+                        setMobileColumn('center');
+                      }
+                    }}
                     onClick={() => {
                       onSelectDocument(doc.documentId);
                       setMobileColumn('center');
                     }}
-                    className={`p-3 rounded-xl cursor-pointer transition-all border text-xs group ${
+                    className={`p-3 rounded-xl cursor-pointer transition-all border text-xs group focus:outline-hidden focus:ring-2 focus:ring-indigo-300 ${
                       isSelected
                         ? 'bg-indigo-50/70 border-indigo-200 shadow-2xs'
                         : 'border-transparent hover:bg-slate-50 hover:border-slate-200/80 text-slate-700'
@@ -383,6 +415,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 min-w-0">
                         <FileText
+                          aria-hidden="true"
                           className={`w-4 h-4 shrink-0 mt-0.5 ${
                             isSelected ? 'text-indigo-600' : 'text-slate-400'
                           }`}
@@ -404,11 +437,11 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                             await onDeleteDocument(doc.documentId);
                           }
                         }}
-                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded-sm transition-opacity"
-                        title="Delete document"
-                        aria-label="Delete document"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-rose-600 p-1 rounded-sm transition-opacity focus:outline-hidden focus:ring-2 focus:ring-rose-300"
+                        title={`Delete document ${doc.fileName}`}
+                        aria-label={`Delete document ${doc.fileName}`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </div>
 
@@ -436,7 +469,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
 
           {/* Privacy & Isolation Footer */}
           <div className="p-3 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+            <Shield className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
             <span className="truncate">Encrypted & Owner-Isolated</span>
           </div>
         </aside>
@@ -445,13 +478,14 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         {/* CENTER COLUMN: Document / Content Area with Sub-Navigation   */}
         {/* ============================================================ */}
         <main
+          id="mobile-col-center"
           className={`flex-1 min-w-0 flex flex-col bg-[#faf9f6] overflow-x-hidden ${
             mobileColumn === 'center' ? 'flex' : 'hidden lg:flex'
           }`}
         >
           {/* Sub-Navigation Bar */}
           <div className="bg-white border-b border-slate-200 px-4 sm:px-6 shrink-0 w-full overflow-x-auto">
-            <div className="flex items-center gap-4 sm:gap-6 min-w-max text-xs font-medium">
+            <div className="flex items-center gap-4 sm:gap-6 min-w-max text-xs font-medium" role="tablist" aria-label="Document analysis sections">
               {[
                 { id: 'overview' as const, label: 'Overview', icon: Layers, count: undefined },
                 { id: 'attention' as const, label: 'Attention', icon: AlertTriangle, count: attentionItems.length },
@@ -466,14 +500,17 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                   <button
                     key={tab.id}
                     id={`subnav-${tab.id}-btn`}
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`tabpanel-${tab.id}`}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-3.5 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    className={`py-3.5 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap focus:outline-hidden focus:ring-2 focus:ring-indigo-300 ${
                       isActive
                         ? 'border-indigo-600 text-indigo-700 font-semibold'
                         : 'border-transparent text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5" />
+                    <Icon className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>{tab.label}</span>
                     {tab.count !== undefined && tab.count > 0 && (
                       <span
@@ -493,7 +530,13 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
           </div>
 
           {/* Tab Content View Area */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0">
+          <div
+            className="flex-1 overflow-y-auto p-4 sm:p-6 min-w-0 focus:outline-hidden"
+            role="tabpanel"
+            id={`tabpanel-${activeTab}`}
+            aria-labelledby={`subnav-${activeTab}-btn`}
+            tabIndex={0}
+          >
             {!activeDocument ? (
               <div className="max-w-md mx-auto text-center py-16">
                 <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />

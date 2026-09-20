@@ -228,7 +228,7 @@ export async function updateDocumentStatus(
   userId: string,
   workspaceId: string,
   documentId: string,
-  updates: Partial<Pick<LegalDocument, 'processingStatus' | 'analysisStatus' | 'summaryPreview' | 'pageCount'>>
+  updates: Partial<Pick<LegalDocument, 'processingStatus' | 'analysisStatus' | 'summaryPreview' | 'pageCount' | 'extractedText'>>
 ): Promise<void> {
   const path = `users/${userId}/workspaces/${workspaceId}/documents/${documentId}`;
   try {
@@ -308,6 +308,35 @@ export async function saveInsight(
   }
 }
 
+export async function saveInsightsBatch(
+  userId: string,
+  workspaceId: string,
+  insightsData: Omit<Insight, 'insightId' | 'ownerId' | 'workspaceId'>[]
+): Promise<Insight[]> {
+  if (!insightsData || insightsData.length === 0) return [];
+  const results: Insight[] = [];
+  const promises = insightsData.map(data => {
+    const insightId = generateSafeId('ins');
+    const insight: Insight = {
+      insightId,
+      workspaceId,
+      ownerId: userId,
+      ...data,
+    };
+    results.push(insight);
+    const docRef = doc(db, 'users', userId, 'workspaces', workspaceId, 'insights', insightId);
+    return setDoc(docRef, insight);
+  });
+
+  try {
+    await Promise.all(promises);
+    return results;
+  } catch (error) {
+    const path = `users/${userId}/workspaces/${workspaceId}/insights`;
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
 export async function getWorkspaceTimeline(
   userId: string,
   workspaceId: string
@@ -342,6 +371,35 @@ export async function saveTimelineEvent(
     await setDoc(docRef, event);
     return event;
   } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function saveTimelineEventsBatch(
+  userId: string,
+  workspaceId: string,
+  eventsData: Omit<TimelineEvent, 'eventId' | 'ownerId' | 'workspaceId'>[]
+): Promise<TimelineEvent[]> {
+  if (!eventsData || eventsData.length === 0) return [];
+  const results: TimelineEvent[] = [];
+  const promises = eventsData.map(data => {
+    const eventId = generateSafeId('time');
+    const event: TimelineEvent = {
+      eventId,
+      workspaceId,
+      ownerId: userId,
+      ...data,
+    };
+    results.push(event);
+    const docRef = doc(db, 'users', userId, 'workspaces', workspaceId, 'timeline', eventId);
+    return setDoc(docRef, event);
+  });
+
+  try {
+    await Promise.all(promises);
+    return results;
+  } catch (error) {
+    const path = `users/${userId}/workspaces/${workspaceId}/timeline`;
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
