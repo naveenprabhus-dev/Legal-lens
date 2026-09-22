@@ -97,25 +97,26 @@ export function useDocuments(userId: string | undefined, workspaceId: string | u
                 setTimeline(cachedRec.timeline);
               }
             }
-          } else {
-            // Fetch persisted document analysis record from Firestore
-            const savedRecord = await getDocumentAnalysisRecord(userId, workspaceId, activeDocumentId);
-            if (isMounted && savedRecord) {
-              const rec = savedRecord as unknown as DocumentAnalysisRecord;
-              docAnalysisCacheRef.current.set(activeDocumentId, rec);
-              setAnalysisRecord(rec);
-              if (rec.clauses && rec.clauses.length > 0) {
-                setClauses(rec.clauses);
-              }
-              if (rec.attentionItems && rec.attentionItems.length > 0) {
-                setAttentionItems(rec.attentionItems);
-              }
-              if (rec.timeline && rec.timeline.length > 0) {
-                setTimeline(rec.timeline);
-              }
-            } else if (isMounted) {
-              setAnalysisRecord(null);
+            return;
+          }
+
+          // Fetch persisted document analysis record from Firestore
+          const savedRecord = await getDocumentAnalysisRecord(userId, workspaceId, activeDocumentId);
+          if (isMounted && savedRecord) {
+            docAnalysisCacheRef.current.set(activeDocumentId, savedRecord);
+            setAnalysisRecord(savedRecord);
+            if (savedRecord.clauses && savedRecord.clauses.length > 0) {
+              setClauses(savedRecord.clauses);
             }
+            if (savedRecord.attentionItems && savedRecord.attentionItems.length > 0) {
+              setAttentionItems(savedRecord.attentionItems);
+            }
+            if (savedRecord.timeline && savedRecord.timeline.length > 0) {
+              setTimeline(savedRecord.timeline);
+            }
+            return;
+          } else if (isMounted) {
+            setAnalysisRecord(null);
           }
         }
 
@@ -248,13 +249,12 @@ export function useDocuments(userId: string | undefined, workspaceId: string | u
       // Check Firestore saved record before making any Gemini call
       const saved = await getDocumentAnalysisRecord(userId, workspaceId, doc.documentId);
       if (saved) {
-        const savedRec = saved as unknown as DocumentAnalysisRecord;
-        docAnalysisCacheRef.current.set(doc.documentId, savedRec);
-        setAnalysisRecord(savedRec);
-        setClauses(savedRec.clauses || []);
-        setAttentionItems(savedRec.attentionItems || []);
-        if (savedRec.timeline && savedRec.timeline.length > 0) {
-          setTimeline(savedRec.timeline);
+        docAnalysisCacheRef.current.set(doc.documentId, saved);
+        setAnalysisRecord(saved);
+        setClauses(saved.clauses || []);
+        setAttentionItems(saved.attentionItems || []);
+        if (saved.timeline && saved.timeline.length > 0) {
+          setTimeline(saved.timeline);
         }
         setLifecycleStage('READY');
         return;
@@ -347,32 +347,13 @@ export function useDocuments(userId: string | undefined, workspaceId: string | u
         updatedAt: new Date().toISOString(),
       };
 
-      // Priority 4: Batch write operations in parallel instead of sequential loops
-      const insightsToSave = data.insights.map(ins => ({
-        documentId: doc.documentId,
-        type: ins.type,
-        title: ins.title,
-        description: ins.description,
-        severity: ins.severity,
-        recommendation: ins.recommendation,
-      }));
-
-      const timelineToSave = data.timeline.map(tm => ({
-        documentId: doc.documentId,
-        date: tm.date,
-        title: tm.title,
-        description: tm.description,
-        importance: tm.importance,
-      }));
-
-      const [savedInsights, savedTimeline] = await Promise.all([
-        saveInsightsBatch(userId, workspaceId, insightsToSave),
-        saveTimelineEventsBatch(userId, workspaceId, timelineToSave),
+      // Persist canonical analysis record and update document status concurrently
+      await Promise.all([
         saveDocumentAnalysisRecord(
           userId,
           workspaceId,
           doc.documentId,
-          fullAnalysisRecord as unknown as Record<string, unknown>
+          fullAnalysisRecord
         ),
         updateDocumentStatus(userId, workspaceId, doc.documentId, {
           analysisStatus: 'completed',
@@ -387,14 +368,7 @@ export function useDocuments(userId: string | undefined, workspaceId: string | u
       setAnalysisRecord(fullAnalysisRecord);
       setClauses(normalizedClauses);
       setAttentionItems(normalizedAttention);
-      if (savedInsights && savedInsights.length > 0) {
-        setInsights(savedInsights);
-      }
-      if (savedTimeline && savedTimeline.length > 0) {
-        setTimeline(savedTimeline);
-      } else {
-        setTimeline(normalizedTimeline);
-      }
+      setTimeline(normalizedTimeline);
 
       setLifecycleStage('READY');
     } catch (error) {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import {
   FileText,
@@ -68,6 +68,8 @@ interface WorkspaceShellProps {
 
 type SubNavTab = 'overview' | 'attention' | 'clauses' | 'timeline' | 'evidence' | 'questions';
 
+const EMPTY_ATTENTION_ITEMS: AttentionItem[] = [];
+
 export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   user,
   workspace,
@@ -84,7 +86,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   analyzing,
   clauses,
   insights,
-  attentionItems = [],
+  attentionItems = EMPTY_ATTENTION_ITEMS,
   timeline,
   analysisRecord,
   onSaveQuestion,
@@ -134,13 +136,13 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     return attentionItems.filter(item => item.category === selectedAttentionCategory);
   }, [attentionItems, selectedAttentionCategory]);
 
-  const handleCopyClause = (id: string, text: string) => {
+  const handleCopyClause = useCallback((id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedClauseId(id);
     setTimeout(() => setCopiedClauseId(null), 2500);
-  };
+  }, []);
 
-  const handleAddQuestion = async (e: React.FormEvent) => {
+  const handleAddQuestion = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newQuestionText.trim()) return;
 
@@ -158,7 +160,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
     } catch (err) {
       console.error('Failed to add question:', err);
     }
-  };
+  }, [newQuestionText, onSaveQuestion]);
 
   // Lifecycle messaging helper
   const getLifecycleMessage = () => {

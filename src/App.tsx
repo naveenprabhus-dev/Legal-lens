@@ -1,16 +1,37 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useWorkspaces } from './hooks/useWorkspaces';
 import { useDocuments } from './hooks/useDocuments';
 import { LandingPage } from './components/landing/LandingPage';
-import { AuthModal } from './components/auth/AuthModal';
 import { Header } from './components/common/Header';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { WorkspaceShell } from './components/workspace/WorkspaceShell';
-import { CompareView } from './components/views/CompareView';
-import { PreparationBriefsView } from './components/views/PreparationBriefsView';
 import { saveQuestion } from './services/firebase/firestore';
 import { Scale, Loader2 } from 'lucide-react';
+
+// Code split auxiliary views and modals
+const AuthModal = lazy(() =>
+  import('./components/auth/AuthModal').then(module => ({ default: module.AuthModal }))
+);
+const CompareView = lazy(() =>
+  import('./components/views/CompareView').then(module => ({ default: module.CompareView }))
+);
+const PreparationBriefsView = lazy(() =>
+  import('./components/views/PreparationBriefsView').then(module => ({ default: module.PreparationBriefsView }))
+);
+
+function ViewLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading view"
+      className="flex-1 flex flex-col items-center justify-center min-h-[400px] p-12 text-slate-500"
+    >
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-3" aria-hidden="true" />
+      <p className="text-sm font-medium text-slate-600">Loading view...</p>
+    </div>
+  );
+}
 
 export default function App() {
   const { user, loading: authLoading, error: authError, isSigningIn, login, logout } = useAuth();
@@ -79,16 +100,20 @@ export default function App() {
     return (
       <>
         <LandingPage onGetStarted={() => setIsAuthModalOpen(true)} />
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-          onLoginWithGoogle={async () => {
-            await login();
-            setIsAuthModalOpen(false);
-          }}
-          isSigningIn={isSigningIn}
-          error={authError}
-        />
+        {isAuthModalOpen && (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <AuthModal
+              isOpen={isAuthModalOpen}
+              onClose={() => setIsAuthModalOpen(false)}
+              onLoginWithGoogle={async () => {
+                await login();
+                setIsAuthModalOpen(false);
+              }}
+              isSigningIn={isSigningIn}
+              error={authError}
+            />
+          </Suspense>
+        )}
       </>
     );
   }
@@ -174,26 +199,30 @@ export default function App() {
         )}
 
         {activeView === 'compare' && (
-          <CompareView
-            onBackToDashboard={() => setActiveView('dashboard')}
-            activeWorkspace={activeWorkspace}
-            documents={documents}
-            activeDocument={activeDocument}
-            analysisRecord={analysisRecord}
-            onNavigateToWorkspace={() => setActiveView('workspace')}
-          />
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <CompareView
+              onBackToDashboard={() => setActiveView('dashboard')}
+              activeWorkspace={activeWorkspace}
+              documents={documents}
+              activeDocument={activeDocument}
+              analysisRecord={analysisRecord}
+              onNavigateToWorkspace={() => setActiveView('workspace')}
+            />
+          </Suspense>
         )}
 
         {activeView === 'briefs' && (
-          <PreparationBriefsView
-            onBackToDashboard={() => setActiveView('dashboard')}
-            activeWorkspace={activeWorkspace}
-            documents={documents}
-            activeDocument={activeDocument}
-            analysisRecord={analysisRecord}
-            onSelectDocument={setActiveDocumentId}
-            onNavigateToWorkspace={() => setActiveView('workspace')}
-          />
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <PreparationBriefsView
+              onBackToDashboard={() => setActiveView('dashboard')}
+              activeWorkspace={activeWorkspace}
+              documents={documents}
+              activeDocument={activeDocument}
+              analysisRecord={analysisRecord}
+              onSelectDocument={setActiveDocumentId}
+              onNavigateToWorkspace={() => setActiveView('workspace')}
+            />
+          </Suspense>
         )}
       </div>
     </div>

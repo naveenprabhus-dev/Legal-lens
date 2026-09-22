@@ -17,6 +17,7 @@ import {
   Workspace,
   LegalDocument,
   DocumentAnalysis,
+  DocumentAnalysisRecord,
   Insight,
   TimelineEvent,
   Question,
@@ -500,7 +501,7 @@ export async function saveDocumentAnalysisRecord(
   userId: string,
   workspaceId: string,
   documentId: string,
-  analysisData: Record<string, unknown>
+  analysisData: DocumentAnalysisRecord
 ): Promise<void> {
   const path = `users/${userId}/workspaces/${workspaceId}/analyses/${documentId}`;
   const now = new Date().toISOString();
@@ -524,12 +525,12 @@ export async function getDocumentAnalysisRecord(
   userId: string,
   workspaceId: string,
   documentId: string
-): Promise<Record<string, unknown> | null> {
+): Promise<DocumentAnalysisRecord | null> {
   const path = `users/${userId}/workspaces/${workspaceId}/analyses/${documentId}`;
   try {
     const docRef = doc(db, 'users', userId, 'workspaces', workspaceId, 'analyses', documentId);
     const snap = await getDoc(docRef);
-    return snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+    return snap.exists() ? (snap.data() as DocumentAnalysisRecord) : null;
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
   }

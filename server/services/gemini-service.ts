@@ -23,6 +23,10 @@ const MAX_QA_CACHE_SIZE = 200;
 const analysisCache = new Map<string, CacheEntry<AIAnalysisOutput>>();
 const qaCache = new Map<string, CacheEntry<DocumentAnswerType>>();
 
+// In-flight promise maps to coalesce concurrent identical requests
+const inFlightAnalyses = new Map<string, Promise<AIAnalysisOutput>>();
+const inFlightQAs = new Map<string, Promise<DocumentAnswerType>>();
+
 function computeSimpleHash(input: string): string {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
@@ -40,6 +44,9 @@ function getCachedItem<T>(cache: Map<string, CacheEntry<T>>, key: string): T | n
     cache.delete(key);
     return null;
   }
+  // True LRU: Re-insert on read so the most recently accessed item stays active
+  cache.delete(key);
+  cache.set(key, entry);
   return entry.data;
 }
 
@@ -57,6 +64,8 @@ function setCachedItem<T>(cache: Map<string, CacheEntry<T>>, key: string, data: 
 export function clearAiServiceCache(): void {
   analysisCache.clear();
   qaCache.clear();
+  inFlightAnalyses.clear();
+  inFlightQAs.clear();
 }
 
 function getAiClient(): GoogleGenAI {
@@ -113,62 +122,75 @@ export async function analyzeDocumentStructure(
     return cachedResult;
   }
 
-  if (!isGeminiConfigured()) {
-    const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
-    setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
-    return fallback;
+  // Coalesce concurrent identical in-flight requests
+  const existingInFlight = inFlightAnalyses.get(cacheKey);
+  if (existingInFlight) {
+    return existingInFlight;
   }
 
-  const client = getAiClient();
-  const prompt = buildDocumentAnalysisPrompt({
-    fileName: req.fileName,
-    documentContent: req.documentExcerpt,
-  });
-
-  try {
-    const response = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const responseText = response.text || '{}';
-    let rawJson: unknown;
-    try {
-      rawJson = JSON.parse(responseText);
-    } catch {
-      // If output contained any wrapping markdown or formatting, try stripping it
-      const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      rawJson = JSON.parse(cleaned);
-    }
-
-    // Runtime Schema Validation (Part I)
-    const validationResult = AIAnalysisOutputSchema.safeParse(rawJson);
-    if (!validationResult.success) {
-      console.warn('AI analysis output failed strict schema validation:', validationResult.error.format());
+  const analysisPromise = (async (): Promise<AIAnalysisOutput> => {
+    if (!isGeminiConfigured()) {
       const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
       setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
       return fallback;
     }
 
-    const data = validationResult.data;
+    const client = getAiClient();
+    const prompt = buildDocumentAnalysisPrompt({
+      fileName: req.fileName,
+      documentContent: req.documentExcerpt,
+    });
 
-    // Ensure attention items exist and have Red/Amber/Green categories
-    if (!data.attentionItems || data.attentionItems.length === 0) {
-      data.attentionItems = buildAttentionItemsFromAnalysis(data, req.fileName);
+    try {
+      const response = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const responseText = response.text || '{}';
+      let rawJson: unknown;
+      try {
+        rawJson = JSON.parse(responseText);
+      } catch {
+        // If output contained any wrapping markdown or formatting, try stripping it
+        const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        rawJson = JSON.parse(cleaned);
+      }
+
+      // Runtime Schema Validation (Part I)
+      const validationResult = AIAnalysisOutputSchema.safeParse(rawJson);
+      if (!validationResult.success) {
+        console.warn('AI analysis output failed strict schema validation:', validationResult.error.format());
+        const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
+        setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
+        return fallback;
+      }
+
+      const data = validationResult.data;
+
+      // Ensure attention items exist and have Red/Amber/Green categories
+      if (!data.attentionItems || data.attentionItems.length === 0) {
+        data.attentionItems = buildAttentionItemsFromAnalysis(data, req.fileName);
+      }
+
+      // Cache verified structured output
+      setCachedItem(analysisCache, cacheKey, data, MAX_ANALYSIS_CACHE_SIZE);
+      return data;
+    } catch (error) {
+      console.error('Gemini analysis failed during processing:', error instanceof Error ? error.message : error);
+      const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
+      setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
+      return fallback;
+    } finally {
+      inFlightAnalyses.delete(cacheKey);
     }
+  })();
 
-    // Cache verified structured output
-    setCachedItem(analysisCache, cacheKey, data, MAX_ANALYSIS_CACHE_SIZE);
-    return data;
-  } catch (error) {
-    console.error('Gemini analysis failed during processing:', error instanceof Error ? error.message : error);
-    const fallback = getRealisticAnalysis(req.fileName, req.documentExcerpt);
-    setCachedItem(analysisCache, cacheKey, fallback, MAX_ANALYSIS_CACHE_SIZE);
-    return fallback;
-  }
+  inFlightAnalyses.set(cacheKey, analysisPromise);
+  return analysisPromise;
 }
 
 /**
@@ -190,58 +212,71 @@ export async function answerGroundedQuestion(
     return cachedQA;
   }
 
-  if (!isGeminiConfigured()) {
-    const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
-    setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
-    return fallback;
+  // Coalesce concurrent identical in-flight Q&A requests
+  const existingInFlight = inFlightQAs.get(cacheKey);
+  if (existingInFlight) {
+    return existingInFlight;
   }
 
-  const client = getAiClient();
-  const prompt = buildGroundedQAPrompt({
-    question: req.question,
-    documentTitle: req.documentTitle,
-    documentContext: req.documentContext,
-  });
-
-  try {
-    const response = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const responseText = response.text || '{}';
-    let rawJson: unknown;
-    try {
-      rawJson = JSON.parse(responseText);
-    } catch {
-      const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      rawJson = JSON.parse(cleaned);
-    }
-
-    const validationResult = DocumentAnswerSchema.safeParse(rawJson);
-    if (!validationResult.success) {
-      console.warn('Grounded Q&A output schema validation warning:', validationResult.error.format());
+  const qaPromise = (async (): Promise<DocumentAnswerType> => {
+    if (!isGeminiConfigured()) {
       const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
       setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
       return fallback;
     }
 
-    const finalAnswer: DocumentAnswerType = {
-      ...validationResult.data,
-      disclaimer,
-    };
+    const client = getAiClient();
+    const prompt = buildGroundedQAPrompt({
+      question: req.question,
+      documentTitle: req.documentTitle,
+      documentContext: req.documentContext,
+    });
 
-    setCachedItem(qaCache, cacheKey, finalAnswer, MAX_QA_CACHE_SIZE);
-    return finalAnswer;
-  } catch (error) {
-    console.error('Gemini Q&A query failed:', error instanceof Error ? error.message : error);
-    const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
-    setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
-    return fallback;
-  }
+    try {
+      const response = await client.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const responseText = response.text || '{}';
+      let rawJson: unknown;
+      try {
+        rawJson = JSON.parse(responseText);
+      } catch {
+        const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        rawJson = JSON.parse(cleaned);
+      }
+
+      const validationResult = DocumentAnswerSchema.safeParse(rawJson);
+      if (!validationResult.success) {
+        console.warn('Grounded Q&A output schema validation warning:', validationResult.error.format());
+        const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+        setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
+        return fallback;
+      }
+
+      const finalAnswer: DocumentAnswerType = {
+        ...validationResult.data,
+        disclaimer,
+      };
+
+      setCachedItem(qaCache, cacheKey, finalAnswer, MAX_QA_CACHE_SIZE);
+      return finalAnswer;
+    } catch (error) {
+      console.error('Gemini Q&A query failed:', error instanceof Error ? error.message : error);
+      const fallback = getFallbackQAResponse(req.question, req.documentTitle, req.documentContext);
+      setCachedItem(qaCache, cacheKey, fallback, MAX_QA_CACHE_SIZE);
+      return fallback;
+    } finally {
+      inFlightQAs.delete(cacheKey);
+    }
+  })();
+
+  inFlightQAs.set(cacheKey, qaPromise);
+  return qaPromise;
 }
 
 /**
